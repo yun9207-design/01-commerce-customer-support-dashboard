@@ -2,6 +2,9 @@ import { AppState } from '../domain/types';
 import { parseBackup, parseState } from '../domain/validation';
 import { makeSeed } from '../data/seed';
 export const STORAGE_KEY = 'commerce-cs-lab:state:v1';
+const PROBE_KEY = 'commerce-cs-lab:fit-probe';
+export const SAVE_FAILED = '브라우저 저장 용량/권한 문제로 반영하지 못했습니다. 기존 자료는 유지됩니다. 백업 후 공간을 확보하세요.';
+export const RESTORE_FAILED = '복원할 자료가 브라우저 저장 용량(또는 권한)을 넘어 저장하지 못했습니다. 현재 자료는 바뀌지 않았습니다. 더 작은 백업을 선택하거나, 현재 자료를 먼저 JSON 백업한 뒤 정리하세요.';
 export type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 export type LoadResult = {
     state: AppState;
@@ -13,6 +16,7 @@ export interface Repository {
     load: () => LoadResult;
     save: (state: AppState) => void;
     replace: (state: AppState) => void;
+    fits: (state: AppState) => boolean;
     raw: () => string | null;
 }
 // Single-browser learning adapter. No credentials or network calls. Not a multi-user database.
@@ -67,15 +71,72 @@ export class LocalRepository implements Repository {
             this.storage.setItem(STORAGE_KEY, raw);
         }
         catch {
-            throw Error('브라우저 저장 용량/권한 문제로 반영하지 못했습니다. 기존 자료는 유지됩니다. 백업 후 공간을 확보하세요.');
+            throw Error(SAVE_FAILED);
         }
         this.expected = raw;
     }
-    replace(state: AppState) { const clean = parseState(state); if (!this.storage) {
-        this.session = clean;
+    // Explicit whole-state replacement (restore/reset). A failed write must leave the current data exactly as it was.
+    replace(state: AppState) {
+        const clean = parseState(state);
+        if (!this.storage) {
+            this.session = clean;
+            this.blocked = false;
+            return;
+        }
+        const raw = JSON.stringify(clean);
+        let previous: string | null = null;
+        try {
+            previous = this.storage.getItem(STORAGE_KEY);
+        }
+        catch { /* unreadable storage: the write below decides */ }
+        try {
+            this.storage.setItem(STORAGE_KEY, raw);
+        }
+        catch {
+            // A failed setItem should leave the old value in place; verify and restore it if some browser did not.
+            try {
+                if (this.storage.getItem(STORAGE_KEY) !== previous) {
+                    if (previous === null)
+                        this.storage.removeItem(STORAGE_KEY);
+                    else
+                        this.storage.setItem(STORAGE_KEY, previous);
+                }
+            }
+            catch { /* nothing more can be done; the original error is reported below */ }
+            throw Error(RESTORE_FAILED);
+        }
+        this.expected = raw;
         this.blocked = false;
-        return;
-    } const raw = JSON.stringify(clean); this.storage.setItem(STORAGE_KEY, raw); this.expected = raw; this.blocked = false; }
+    }
+    // Pre-flight for restore: would this state fit in browser storage right now? Writes a throwaway probe key as large as the
+    // net growth (new size minus current size) and removes it. The real state key is never touched.
+    fits(state: AppState): boolean {
+        if (!this.storage)
+            return true;
+        const raw = JSON.stringify(state);
+        let growth = raw.length;
+        try {
+            growth -= (this.storage.getItem(STORAGE_KEY) ?? '').length;
+        }
+        catch {
+            return false;
+        }
+        if (growth <= 0)
+            return true;
+        try {
+            this.storage.setItem(PROBE_KEY, 'x'.repeat(growth));
+            return true;
+        }
+        catch {
+            return false;
+        }
+        finally {
+            try {
+                this.storage.removeItem(PROBE_KEY);
+            }
+            catch { /* best effort */ }
+        }
+    }
 }
 export function browserRepository(): LocalRepository { try {
     const storage = window.localStorage;

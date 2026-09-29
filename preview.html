@@ -4680,11 +4680,14 @@ exports.shortId = shortId;
 "src/lib/repository":function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LocalRepository = exports.STORAGE_KEY = void 0;
+exports.LocalRepository = exports.RESTORE_FAILED = exports.SAVE_FAILED = exports.STORAGE_KEY = void 0;
 exports.browserRepository = browserRepository;
 const validation_1 = require("../domain/validation");
 const seed_1 = require("../data/seed");
 exports.STORAGE_KEY = 'commerce-cs-lab:state:v1';
+const PROBE_KEY = 'commerce-cs-lab:fit-probe';
+exports.SAVE_FAILED = '브라우저 저장 용량/권한 문제로 반영하지 못했습니다. 기존 자료는 유지됩니다. 백업 후 공간을 확보하세요.';
+exports.RESTORE_FAILED = '복원할 자료가 브라우저 저장 용량(또는 권한)을 넘어 저장하지 못했습니다. 현재 자료는 바뀌지 않았습니다. 더 작은 백업을 선택하거나, 현재 자료를 먼저 JSON 백업한 뒤 정리하세요.';
 // Single-browser learning adapter. No credentials or network calls. Not a multi-user database.
 class LocalRepository {
     storage;
@@ -4742,10 +4745,11 @@ class LocalRepository {
             this.storage.setItem(exports.STORAGE_KEY, raw);
         }
         catch {
-            throw Error('브라우저 저장 용량/권한 문제로 반영하지 못했습니다. 기존 자료는 유지됩니다. 백업 후 공간을 확보하세요.');
+            throw Error(exports.SAVE_FAILED);
         }
         this.expected = raw;
     }
+    // Explicit whole-state replacement (restore/reset). A failed write must leave the current data exactly as it was.
     replace(state) {
         const clean = (0, validation_1.parseState)(state);
         if (!this.storage) {
@@ -4754,9 +4758,58 @@ class LocalRepository {
             return;
         }
         const raw = JSON.stringify(clean);
-        this.storage.setItem(exports.STORAGE_KEY, raw);
+        let previous = null;
+        try {
+            previous = this.storage.getItem(exports.STORAGE_KEY);
+        }
+        catch { /* unreadable storage: the write below decides */ }
+        try {
+            this.storage.setItem(exports.STORAGE_KEY, raw);
+        }
+        catch {
+            // A failed setItem should leave the old value in place; verify and restore it if some browser did not.
+            try {
+                if (this.storage.getItem(exports.STORAGE_KEY) !== previous) {
+                    if (previous === null)
+                        this.storage.removeItem(exports.STORAGE_KEY);
+                    else
+                        this.storage.setItem(exports.STORAGE_KEY, previous);
+                }
+            }
+            catch { /* nothing more can be done; the original error is reported below */ }
+            throw Error(exports.RESTORE_FAILED);
+        }
         this.expected = raw;
         this.blocked = false;
+    }
+    // Pre-flight for restore: would this state fit in browser storage right now? Writes a throwaway probe key as large as the
+    // net growth (new size minus current size) and removes it. The real state key is never touched.
+    fits(state) {
+        if (!this.storage)
+            return true;
+        const raw = JSON.stringify(state);
+        let growth = raw.length;
+        try {
+            growth -= (this.storage.getItem(exports.STORAGE_KEY) ?? '').length;
+        }
+        catch {
+            return false;
+        }
+        if (growth <= 0)
+            return true;
+        try {
+            this.storage.setItem(PROBE_KEY, 'x'.repeat(growth));
+            return true;
+        }
+        catch {
+            return false;
+        }
+        finally {
+            try {
+                this.storage.removeItem(PROBE_KEY);
+            }
+            catch { /* best effort */ }
+        }
     }
 }
 exports.LocalRepository = LocalRepository;
@@ -5823,7 +5876,7 @@ const ui_1 = require("../components/ui");
 const validation_1 = require("../domain/validation");
 const files_1 = require("../lib/files");
 function Settings() {
-    const { state, role, storage, replace, reset, notify, raw } = (0, store_1.useData)();
+    const { state, role, storage, replace, canStore, reset, notify, raw } = (0, store_1.useData)();
     const [restore, setRestore] = (0, react_1.useState)(null);
     const [confirmText, setConfirmText] = (0, react_1.useState)('');
     const [resetOpen, setResetOpen] = (0, react_1.useState)(false);
@@ -5835,6 +5888,8 @@ function Settings() {
         try {
             const text = await (0, files_1.readText)(file, 12000000);
             const parsed = (0, validation_1.parseBackup)(text);
+            if (!canStore(parsed))
+                throw Error(`이 백업(파일 약 ${(text.length / 1e6).toFixed(1)}MB)은 이 브라우저의 저장 공간에 들어가지 않아 복원할 수 없습니다. 현재 자료는 바뀌지 않았습니다. 더 작은 백업을 선택하거나, 현재 자료를 먼저 JSON 백업한 뒤 정리하세요.`);
             setRestore(parsed);
             setConfirmText('');
         }
@@ -6395,7 +6450,7 @@ function DataProvider({ children }) {
             return false;
         }
     }
-    return react_1.default.createElement(DataContext.Provider, { value: { state, role, setRole, run, page, go, selectedId, select, query, setQuery, help, setHelp, toast, notify, storage, replace, reset: () => replace((0, seed_1.makeSeed)()), raw: () => repo.current.raw(), now } }, children);
+    return react_1.default.createElement(DataContext.Provider, { value: { state, role, setRole, run, page, go, selectedId, select, query, setQuery, help, setHelp, toast, notify, storage, replace, canStore: (s) => repo.current.fits(s), reset: () => replace((0, seed_1.makeSeed)()), raw: () => repo.current.raw(), now } }, children);
 }
 function useData() {
     const c = (0, react_1.useContext)(DataContext);

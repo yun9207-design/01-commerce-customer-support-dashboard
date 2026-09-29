@@ -25,6 +25,7 @@ type Context = {
     notify: (s: string, error?: boolean) => void;
     storage: LoadResult;
     replace: (s: AppState) => boolean;
+    canStore: (s: AppState) => boolean;
     reset: () => boolean;
     raw: () => string | null;
     now: number;
@@ -88,7 +89,7 @@ export function DataProvider({ children }: {
         notify((e as Error).message, true);
         return false;
     } }
-    return <DataContext.Provider value={{ state, role, setRole, run, page, go, selectedId, select, query, setQuery, help, setHelp, toast, notify, storage, replace, reset: () => replace(makeSeed()), raw: () => repo.current.raw(), now }}>{children}</DataContext.Provider>;
+    return <DataContext.Provider value={{ state, role, setRole, run, page, go, selectedId, select, query, setQuery, help, setHelp, toast, notify, storage, replace, canStore: (s: AppState) => repo.current.fits(s), reset: () => replace(makeSeed()), raw: () => repo.current.raw(), now }}>{children}</DataContext.Provider>;
 }
 export function useData() { const c = useContext(DataContext); if (!c)
     throw Error('DataProvider가 필요합니다.'); return c; }

@@ -5,7 +5,7 @@ import { AppState } from '../domain/types';
 import { parseBackup } from '../domain/validation';
 import { download, readText, time } from '../lib/files';
 export function Settings() {
-    const { state, role, storage, replace, reset, notify, raw } = useData();
+    const { state, role, storage, replace, canStore, reset, notify, raw } = useData();
     const [restore, setRestore] = useState<AppState | null>(null);
     const [confirmText, setConfirmText] = useState('');
     const [resetOpen, setResetOpen] = useState(false);
@@ -14,6 +14,8 @@ export function Settings() {
         return; setBusy(true); try {
         const text = await readText(file, 12000000);
         const parsed = parseBackup(text);
+        if (!canStore(parsed))
+            throw Error(`이 백업(파일 약 ${(text.length / 1e6).toFixed(1)}MB)은 이 브라우저의 저장 공간에 들어가지 않아 복원할 수 없습니다. 현재 자료는 바뀌지 않았습니다. 더 작은 백업을 선택하거나, 현재 자료를 먼저 JSON 백업한 뒤 정리하세요.`);
         setRestore(parsed);
         setConfirmText('');
     }
