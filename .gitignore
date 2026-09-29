@@ -1,0 +1,17 @@
+node_modules/
+dist/
+dist-vite/
+.test-build/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+playwright-report/
+test-results/
+*.backup.json
+personal-data/
+
+!samples/demo.backup.json
+test-artifacts/
