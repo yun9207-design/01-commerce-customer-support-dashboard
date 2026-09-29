@@ -1,0 +1,25 @@
+import React, { useState } from 'react';
+import { useData } from '../store';
+import { Button, Badge, Icon, PageHeading, Status, Help, Empty, Modal, Field, Confirm } from '../components/ui';
+import { Approval, approvalLabels, orderLabels } from '../domain/types';
+import { money, time, shortId } from '../lib/files';
+export function Approvals() {
+    const { state, role, run, go } = useData();
+    const [filter, setFilter] = useState('active');
+    const [decision, setDecision] = useState<{
+        id: string;
+        value: 'approved' | 'rejected';
+    } | null>(null);
+    const [reason, setReason] = useState('');
+    const [execute, setExecute] = useState<Approval | null>(null);
+    const rows = state.approvals.filter(a => filter === 'all' || filter === 'active' && ['pending', 'approved'].includes(a.status) || a.status === filter);
+    return <>
+ <PageHeading eyebrow="HUMAN IN THE LOOP" title="승인함" description="검토 승인과 실제 실행은 다른 단계입니다. 이 앱의 실행은 로컬 모의 처리입니다." actions={<Badge tone={role === 'manager' ? 'teal' : 'neutral'}>{role === 'manager' ? '관리자 역할 · 검토 가능' : '상담원 역할 · 조회만 가능'}</Badge>}/>
+ <Help title="승인 후에도 다시 확인하는 이유">요청 당시에는 출고 전이었더라도 실행할 때 이미 배송 중일 수 있습니다. 요청에 저장한 주문·정책 버전과 현재 버전이 다르면, 이미 승인했어도 실행을 차단합니다.</Help>
+ {role !== 'manager' && <div className="notice amber"><Icon name="lock"/>상단 ‘실습 역할’을 관리자로 바꾸면 승인·반려·모의 실행을 체험할 수 있습니다. 보안 인증 기능은 아닙니다.</div>}
+ <div className="segmented">{[['active', '진행 중'], ['pending', '검토 대기'], ['approved', '실행 전'], ['executed', '실행 완료'], ['blocked', '차단'], ['all', '전체 이력']].map(([v, l]) => <button key={v} className={filter === v ? 'active' : ''} onClick={() => setFilter(v)}>{l}<span>{state.approvals.filter(a => v === 'all' || v === 'active' && ['pending', 'approved'].includes(a.status) || a.status === v).length}</span></button>)}</div>
+ <div className="approval-list">{rows.length ? rows.map(a => { const t = state.tickets.find(t => t.id === a.ticketId)!; const o = state.orders.find(o => o.id === a.orderId)!; const changed = o.version !== a.orderVersion || state.policy.version !== a.policyVersion; return <article className="panel approval-card" key={a.id}><div className="approval-card-heading"><div className="approval-icon"><Icon name="shield"/></div><div><h2>{t.subject}</h2><p>{shortId(a.id)} · {a.orderId} · {a.requestedBy}</p></div><Status status={a.status} label={approvalLabels[a.status]}/></div><div className="approval-details"><div><span>요청 금액</span><strong>{money(a.amount)}</strong></div><div><span>현재 주문</span><strong>{orderLabels[o.status]}</strong></div><div><span>요청 → 현재 버전</span><strong className={changed ? 'text-danger' : ''}>주문 v{a.orderVersion} → v{o.version}<small>정책 v{a.policyVersion} → v{state.policy.version}</small></strong></div><div><span>요청 시점</span><strong>{time(a.requestedAt)}</strong></div></div><div className="reason-box"><span>요청 사유</span><p>{a.reason}</p>{a.decisionReason && <><span>검토 / 차단 사유 · {a.decisionBy}</span><p>{a.decisionReason}</p></>}</div>{changed && ['pending', 'approved'].includes(a.status) && <div className="notice red"><Icon name="warning"/>요청 후 자료가 달라졌습니다. 승인/실행 버튼에서 최신 조건을 재검사하고 차단 기록을 남깁니다.</div>}<footer><Button variant="ghost" onClick={() => go('tickets', a.ticketId)}>문의 열기</Button><div>{a.status === 'pending' && <><Button disabled={role !== 'manager'} onClick={() => { setDecision({ id: a.id, value: 'rejected' }); setReason(''); }}>반려</Button><Button variant="primary" disabled={role !== 'manager'} onClick={() => { setDecision({ id: a.id, value: 'approved' }); setReason('주문 정보와 학습 정책을 확인했습니다.'); }}>검토 승인</Button></>}{a.status === 'approved' && <Button variant="primary" icon="shield" disabled={role !== 'manager'} onClick={() => setExecute(a)}>재검사 후 모의 실행</Button>}{a.status === 'executed' && <Button onClick={() => go('tickets', a.ticketId)}>결과 안내 · 해결하기</Button>}{['blocked', 'rejected'].includes(a.status) && <Button onClick={() => go('tickets', a.ticketId)}>문의에서 다시 검토</Button>}</div></footer></article>; }) : <Empty title="이 상태의 승인 요청이 없습니다" description="문의 작업대에서 ‘취소 요청’ 문의를 선택하고 승인 요청을 등록하세요." action={<Button variant="primary" onClick={() => go('tickets')}>문의 작업대로</Button>}/>}</div>
+ {decision && <Modal title={decision.value === 'approved' ? '검토 승인' : '반려 사유 기록'} onClose={() => setDecision(null)}><form onSubmit={e => { e.preventDefault(); if (run({ type: 'approval.decide', id: decision.id, decision: decision.value, reason }))
+        setDecision(null); }}><p className="muted">승인은 실행 완료가 아닙니다. 요청 시점과 현재의 자료가 다르면 승인 대신 차단 상태가 됩니다.</p><Field label="검토 사유"><textarea required maxLength={1500} rows={4} value={reason} onChange={e => setReason(e.target.value)}/></Field><div className="modal-actions"><Button onClick={() => setDecision(null)}>돌아가기</Button><Button type="submit" variant="primary">검토 결과 저장</Button></div></form></Modal>}
+ {execute && <Confirm title="모의 취소를 실행할까요?" description={`${execute.orderId}의 버전과 정책을 다시 검사합니다. 조건이 유지되면 앱 안의 주문만 취소 상태로 변경합니다. 실제 쇼핑몰 취소, 결제 환불, 고객 메시지는 실행되지 않습니다. 동일 요청은 한 번만 실행할 수 있습니다.`} button="재검사 · 모의 실행" onClose={() => setExecute(null)} onConfirm={() => { run({ type: 'approval.execute', id: execute.id }); setExecute(null); }}/>}</>;
+}

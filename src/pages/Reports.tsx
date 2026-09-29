@@ -1,0 +1,26 @@
+import React, { useState } from 'react';
+import { useData } from '../store';
+import { Button, Badge, Icon, PageHeading, Help, Empty, Pager } from '../components/ui';
+import { metrics } from '../domain/metrics';
+import { download, time, shortId } from '../lib/files';
+import { toCSV } from '../lib/csv';
+import { typeLabels } from '../domain/types';
+export function Reports() {
+    const { state, now, go } = useData();
+    const [days, setDays] = useState(0);
+    const [tab, setTab] = useState('events');
+    const [query, setQuery] = useState('');
+    const [page, setPage] = useState(0);
+    const m = metrics(state, now, days);
+    const events = state.events.filter(e => (!days || Date.parse(e.at) >= now - days * 86400000) && [e.detail, e.actor, e.kind, e.entityId].join(' ').toLowerCase().includes(query.toLowerCase()));
+    const outbox = state.tickets.flatMap(t => t.messages.map(message => ({ ...message, ticket: t }))).filter(m => (!days || Date.parse(m.at) >= now - days * 86400000) && [m.body, m.by, m.ticket.customer, m.ticket.id].join(' ').toLowerCase().includes(query.toLowerCase())).sort((a, b) => b.at.localeCompare(a.at));
+    const count = tab === 'events' ? events.length : outbox.length;
+    const p = Math.min(page, Math.max(0, Math.ceil(count / 15) - 1));
+    const summary = [['접수 문의', m.total], ['미해결 문의', m.open], ['해결 문의', m.resolved], ['해결 비율 (%)', m.resolutionRate], ['최초 모의 응답 평균 (분)', m.firstReplyMinutes ?? '자료 없음'], ['첫 응답 목표 초과', m.overdue]];
+    return <><PageHeading eyebrow="TRACEABLE OPERATIONS" title="리포트 · 이력" description="어떤 입력이 어떤 결과를 만들었는지 추적합니다. 실제 발송이나 매출 지표는 포함하지 않습니다." actions={<><select aria-label="리포트 기간" value={days} onChange={e => { setDays(Number(e.target.value)); setPage(0); }}><option value={0}>전체 기간</option><option value={7}>최근 7일</option><option value={30}>최근 30일</option></select><Button icon="down" onClick={() => download('support-metrics.csv', toCSV(['지표', '값', '기준'], summary.map(([a, b]) => [a, b, days ? `최근 ${days}일 접수 코호트` : '전체 접수 코호트'])), 'text/csv;charset=utf-8')}>요약 CSV</Button></>}/>
+ <Help title="숫자의 정의를 먼저 확인하세요">상단 지표는 선택 기간에 ‘접수된 문의’를 기준으로 계산합니다. 최초 응답은 문의의 첫 모의 답변 시각, 해결 비율은 현재 해결 상태 / 접수 건수입니다. 아래 이력·발신함은 해당 기간에 발생한 ‘이벤트 시각’ 기준입니다.</Help>
+ <div className="report-kpis">{summary.map(([label, value]) => <div className="panel" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
+ <div className="report-split"><section className="panel"><div className="panel-heading"><div><h2>문의 유형별 해결</h2><p>선택한 접수 기간 기준</p></div></div><div className="table-wrap"><table><thead><tr><th>유형</th><th className="number">접수</th><th className="number">해결</th><th className="number">해결률</th></tr></thead><tbody>{Object.entries(typeLabels).map(([v, l]) => { const ts = m.tickets.filter(t => t.type === v); const solved = ts.filter(t => t.status === 'resolved').length; return <tr key={v}><td>{l}</td><td className="number">{ts.length}</td><td className="number">{solved}</td><td className="number">{ts.length ? Math.round(solved / ts.length * 100) : 0}%</td></tr>; })}</tbody></table></div></section><section className="panel metric-definitions"><h2>이 앱에서 측정하지 않는 것</h2><p><Icon name="info" size={17}/>실제 고객 만족도와 메시지 도달률</p><p><Icon name="info" size={17}/>AI 정확도와 인건비 절감액</p><p><Icon name="info" size={17}/>실제 취소·환불·매출 회복</p><small>근거 없는 성과 수치를 임의로 표시하지 않습니다.</small></section></div>
+ <section className="panel"><div className="table-toolbar"><div className="segmented no-margin"><button className={tab === 'events' ? 'active' : ''} onClick={() => { setTab('events'); setPage(0); }}>작업 이력</button><button className={tab === 'outbox' ? 'active' : ''} onClick={() => { setTab('outbox'); setPage(0); }}>모의 발신함</button></div><div className="input-icon"><Icon name="search" size={17}/><input aria-label="이력 검색" placeholder="담당자 · 내용 · 작업 검색" value={query} onChange={e => { setQuery(e.target.value); setPage(0); }}/></div><Button icon="down" onClick={() => download(tab === 'events' ? 'activity-log.csv' : 'simulated-outbox.csv', tab === 'events' ? toCSV(['at', 'actor', 'role', 'kind', 'entityId', 'detail'], events.map(e => [e.at, e.actor, e.role, e.kind, e.entityId, e.detail])) : toCSV(['at', 'ticketId', 'customer', 'by', 'mode', 'body'], outbox.map(o => [o.at, o.ticket.id, o.ticket.customer, o.by, o.mode, o.body])), 'text/csv;charset=utf-8')}>조회 결과 내보내기</Button></div>
+ {count ? tab === 'events' ? <div className="table-wrap"><table className="audit-table"><thead><tr><th>시각 · 담당</th><th>작업</th><th>대상</th><th>변경 내용</th></tr></thead><tbody>{events.slice(p * 15, p * 15 + 15).map(e => <tr key={e.id}><td>{time(e.at)}<small>{e.actor}</small></td><td><code>{e.kind}</code></td><td title={e.entityId}>{shortId(e.entityId)}</td><td>{e.detail}</td></tr>)}</tbody></table></div> : <div className="outbox-list">{outbox.slice(p * 15, p * 15 + 15).map(m => <article key={m.id}><div><Badge tone="teal">모의 발송만 기록</Badge><strong>{m.ticket.customer}</strong><small>{time(m.at)} · {m.by}</small><Button variant="ghost" onClick={() => go('tickets', m.ticket.id)}>문의 보기</Button></div><p>{m.body}</p></article>)}</div> : <Empty title="조건에 맞는 기록이 없습니다"/>}<Pager count={count} page={p} size={15} onChange={setPage}/><div className="panel-footnote">이력은 로컬 자료이며 위변조 방지 감사로그가 아닙니다. 복원·초기화는 전체 데이터 교체이므로 현재 이력에 과거 기록을 합치지 않습니다.</div></section></>;
+}

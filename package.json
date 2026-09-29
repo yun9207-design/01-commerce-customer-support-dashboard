@@ -1,0 +1,33 @@
+{
+  "name": "commerce-cs-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "\uc5c5\ubb34 \ud750\ub984\uc744 \ubc30\uc6b0\ub294 \ub85c\uceec \uc6b0\uc120 \uc1fc\ud551\ubab0 \uace0\uac1d\uc9c0\uc6d0 \ub300\uc2dc\ubcf4\ub4dc",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "node scripts/build.mjs",
+    "build:vite": "vite build",
+    "preview": "node scripts/serve.mjs",
+    "typecheck": "tsc --noEmit",
+    "typecheck:domain": "tsc -p tsconfig.domain.json --noEmit",
+    "test": "node scripts/test.mjs",
+    "verify": "npm run typecheck && npm test && npm run build",
+    "test:e2e": "python tests/browser_smoke.py",
+    "format": "node scripts/format.mjs"
+  },
+  "dependencies": {
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "5.8.3",
+    "vite": "^7.3.1"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,3 @@
+﻿"id","customer","email","product","amount","status","carrier","tracking","placedAt"
+"IMPORT-101","가상 고객 하나","import1@example.com","샘플 파우치","29000","preparing","","","2026-09-29T00:00:00.000Z"
+"IMPORT-102","가상 고객 둘","import2@example.com","샘플 무드등","56000","shipped","가상택배","DEMO-IMPORT-102","2026-09-29T00:00:00.000Z"

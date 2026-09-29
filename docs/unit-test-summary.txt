@@ -1,0 +1,5 @@
+2026-09-29
+Node.js 22.16.0; TypeScript 5.8.3
+Command: npm test
+Tests: 60; passed: 60; failed: 0; skipped: 0
+See tests/core.test.cjs and docs/TEST_REPORT.md for coverage and limitations.

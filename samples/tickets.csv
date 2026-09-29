@@ -1,0 +1,3 @@
+﻿"id","customer","email","subject","body","orderId","type","priority","assignee"
+"IMPORT-T101","가상 고객 하나","import1@example.com","출고 전 취소 문의","아직 출고 전이면 취소하고 싶어요.","IMPORT-101","cancellation","high","상담원 지수"
+"IMPORT-T102","가상 고객 둘","import2@example.com","배송 위치 문의","배송 진행 상황을 알려주세요.","IMPORT-102","shipping","normal","상담원 민지"

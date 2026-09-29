@@ -1,0 +1,16 @@
+import { AppState, OrderStatus, TicketType, TicketStatus } from '../domain/types';
+export function makeSeed(now = new Date()): AppState {
+    const ago = (h: number) => new Date(now.getTime() - h * 3600000).toISOString();
+    const at = now.toISOString();
+    const products = ['리넨 셔츠 · 크림', '세라믹 머그 2P', '캔버스 토트백', '데스크 램프', '코튼 타월 세트', '시그니처 소파', '오가닉 티셔츠', '스테인리스 텀블러', '무선 키보드', '러그 · 샌드', '리넨 쿠션', '우드 트레이'];
+    const statuses: OrderStatus[] = ['preparing', 'shipped', 'paid', 'delivered', 'preparing', 'paid', 'shipped', 'paid', 'preparing', 'delivered', 'shipped', 'delivered'];
+    const names = ['김하늘', '이서준', '박지우', '최서연', '정도윤', '강민서', '윤지호', '장수빈', '임현우', '오지안', '한유진', '서지민'];
+    const types: TicketType[] = ['cancellation', 'shipping', 'shipping', 'other', 'cancellation', 'cancellation', 'shipping', 'cancellation', 'shipping', 'shipping', 'other', 'shipping'];
+    const times = [3, 5, 29, 8, 1, 26, 31, 6, 12, 80, 50, 105];
+    const subjects = ['출고 전에 주문을 취소하고 싶어요', '택배가 어디쯤 왔나요?', '주문한 상품은 언제 출고되나요?', '상품 사용 방법을 알려주세요', '색상을 바꾸려고 주문 취소합니다', '고액 주문 취소가 가능한가요?', '송장번호를 다시 알려주세요', '결제한 주문 취소 부탁드립니다', '배송 예정일이 궁금합니다', '상품 잘 받았습니다', '교환 관련 문의드립니다', '배송 안내 확인했습니다'];
+    const s: AppState = { schemaVersion: 1, revision: 0, createdAt: at, updatedAt: at, sourceLabel: '가상 샘플 · 실제 고객정보 없음', sourceAt: at, orders: [], tickets: [], approvals: [], events: [], lessons: [], policy: { version: 1, allowPaid: true, allowPreparing: true, maxCancelAmount: 300000, slaHours: 24, shippingNote: '정확한 도착 일정은 택배사 확인이 필요합니다. 확인되지 않은 배송일을 약속하지 않습니다.', cancellationNote: '승인 후에도 출고 여부를 다시 확인합니다. 실제 환불은 이 실습 앱에서 실행하지 않습니다.', shopName: '느린상점 · 실습 스토어' } };
+    s.orders = names.map((n, i) => ({ id: `ORD-${1001 + i}`, customer: `${n} (가상)`, email: `demo${i + 1}@example.com`, product: products[i], amount: [49000, 28000, 35000, 89000, 42000, 690000, 29000, 36000, 129000, 58000, 25000, 32000][i], status: statuses[i], carrier: ['shipped', 'delivered'].includes(statuses[i]) ? '가상택배' : '', tracking: ['shipped', 'delivered'].includes(statuses[i]) ? `DEMO-${80100 + i}` : '', placedAt: ago(times[i] + 24), updatedAt: ago(times[i] + 2), version: 1 }));
+    s.tickets = names.map((n, i) => ({ id: `T-${2001 + i}`, customer: `${n} (가상)`, email: `demo${i + 1}@example.com`, subject: subjects[i], body: `${subjects[i]}\n주문번호는 ORD-${1001 + i}입니다. 확인 부탁드립니다.`, orderId: `ORD-${1001 + i}`, type: types[i], priority: ([0, 5, 6].includes(i) ? 'high' : i === 9 ? 'low' : 'normal') as 'high' | 'normal' | 'low', status: (i >= 9 ? (i === 10 ? 'escalated' : 'resolved') : i === 1 ? 'in_progress' : 'open') as TicketStatus, assignee: i % 2 ? '상담원 민지' : '상담원 지수', createdAt: ago(times[i]), updatedAt: ago(Math.max(0, times[i] - 2)), resolvedAt: [9, 11].includes(i) ? ago(times[i] - 3) : null, draft: '', draftFingerprint: '', messages: [1, 9, 11].includes(i) ? [{ id: `M-seed-${i}`, body: '업로드한 주문 자료 기준으로 배송 상태를 안내드렸습니다. [가상 샘플 답변]', at: ago(times[i] - 1), by: '상담원 민지', fingerprint: 'seed', mode: 'simulated' as const }] : [], notes: [] }));
+    s.events = [{ id: 'E-seed', at, actor: '시스템', role: 'manager', kind: 'sample.loaded', entityId: 'WORKSPACE', detail: '가상 주문 12개 · 문의 12개를 준비했습니다. 실제 발송·환불은 실행하지 않습니다.' }];
+    return s;
+}
